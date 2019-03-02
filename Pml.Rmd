@@ -1,0 +1,120 @@
+---
+title: "Coursera- Practical Machine Learning Project"
+author: "teja"
+date: "2 March 2019"
+output: 
+ html_document:
+   keep_md: true
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+## Libraries
+
+```{r, message=FALSE}
+library(caret)
+library(rattle)
+```
+
+## Loading Data
+
+```{r}
+pmlTrain <- read.csv('pml-training.csv')
+pmlTest <- read.csv('pml-testing.csv')
+```
+
+The training data set is made of 19622 observations on 160 columns. We can notice that many columns have NA values or blank values on almost every observation. So we will remove them, because they will not produce any information. The first seven columns give information about the people who did the test, and also timestamps. We will not take them in our model.
+
+```{r}
+incolTrain <- which(colSums(is.na(pmlTrain)  | pmlTrain == "") > 
+                      dim(pmlTrain)[1]*.9)
+incolTest <- which(colSums(is.na(pmlTest)  | pmlTest == "") > 
+                     dim(pmlTest)[1]*.9)
+pmlTrain2 <- pmlTrain[, -incolTrain]
+pmlTrain2 <- pmlTrain2[, -c(1:7)]
+pmlTest2 <- pmlTest[, -incolTest]
+pmlTest2 <- pmlTest2[, -c(1:7)]
+dim(pmlTrain2)
+dim(pmlTest2)
+```
+
+After cleaning, the new training data set has only 53 columns.
+
+```{r}
+set.seed(12345)
+intrain <- createDataPartition(pmlTrain2$classe , p=0.75, list = FALSE)
+trainData <- pmlTrain2[intrain, ]
+testData <- pmlTrain2[-intrain, ]
+dim(trainData)
+dim(testData)
+```
+
+In the following sections, we will test 3 different models :  classification tree,  random forest  gradient boosting method
+
+In order to limit the effects of overfitting, and improve the efficicency of the models, we will use the *cross-validation technique. We will use 5 folds (usually, 5 or 10 can be used, but 10 folds gives higher run times with no significant increase of the accuracy).
+
+## Train with Classification Tree
+
+```{r, message=FALSE}
+modelTree <- train(classe~., data = trainData, method = "rpart",
+                   trControl = trainControl(method = "cv", number = 5))
+fancyRpartPlot(modelTree$finalModel)
+prediction <- predict(modelTree, newdata = testData)
+conMat <- confusionMatrix(testData$classe, prediction)
+conMat$table
+conMat$overall
+```
+
+We can notice that the accuracy of this first model is very low (about 54%). This means that the outcome class will not be predicted very well by the other predictors.
+
+## Train with Random Forest
+
+```{r, message=FALSE}
+modelRF <- train(classe~., data = trainData, method = "rf", 
+                 trControl = trainControl(method = "cv", number = 5), 
+                 verbose=FALSE)
+prediction <- predict(modelRF, newdata = testData)
+conMat <- confusionMatrix(testData$classe, prediction)
+conMat$table
+conMat$overall
+plot(modelRF)
+```
+
+With random forest, we reach an accuracy of 99.3% using cross-validation with 5 steps. This is very good. But let's see what we can expect with Gradient boosting.
+
+We can also notice that the optimal number of predictors, i.e. the number of predictors giving the highest accuracy, is 27. There is no significal increase of the accuracy with 2 predictors and 27, but the slope decreases more with more than 27 predictors (even if the accuracy is still very good). The fact that not all the accuracy is worse with all the available predictors lets us suggest that there may be some dependencies between them.
+
+At last, using more than about 30 trees does not reduce the error significantly
+
+## Train with Gradient Boosting Model
+
+```{r, message=FALSE}
+modelGbm <- train(classe~., data = trainData, method = "gbm",
+                  trControl = trainControl(method = "cv", number = 5),
+                  verbose=FALSE)
+prediction <- predict(modelGbm, newdata = testData)
+conMat <- confusionMatrix(testData$classe, prediction)
+conMat$table
+conMat$overall
+```
+
+Precision with 5 folds is around 95%.
+
+## Conclusion
+
+This shows that the random forest model is the best one. We will then use it to predict the values of classe for the test data set.
+
+```{r}
+prediction <- predict(modelRF, newdata = pmlTest2)
+prediction
+```
+
+
+
+
+
+
